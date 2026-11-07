@@ -39,21 +39,56 @@ It stores one unique vote for each episode per IP and user-agent pair.
 Endpoint `/feedback/:episodeID/[upvote|downvote]`
 e.g. `/feedback/123456/upvote`
 
+### Authentication and analytics
+
+`ACCOUNTS` (or `ACCOUNTS_FILE`) must be a nonempty JSON object mapping nonempty,
+whitespace-free bearer tokens to positive integer account IDs (1–2147483647).
+Invalid maps fail startup without including credentials in the error. Use
+`Authorization: Bearer <token>` on protected requests.
+
+`GET /analytics/v1/<query>` uses the authenticated account for every contributing
+row, join and latest-date calculation. Query names remain restricted to loaded
+SQL files; there is no client-supplied SQL or account override. The shipped
+`ping` query returns `[{"result":"Pong"}]` without reading tenant data. Custom
+query files must accept one bound `?` account ID and scope all tenant reads to it.
+
 ### Status API
 
-The status API returns the last imports by endpoint:
+`GET /status` requires bearer authentication and no request body. It returns only
+the caller's account, keyed by ID, with endpoint update times in ISO 8601 format:
 
 ```json
-{
-    "account_id": 1,
-    "latestUpdates": [
-        "aggregate": "2021-01-01 00:00:00"
-        "detailedStreams": "2021-01-01 00:00:00"
-    ]
-}
+{"1":{"latestUpdates":{"aggregate":"2026-01-01T00:00:00.000Z"}}}
 ```
 
-To query it, use the following endpoint: `/status`
+An account with no updates receives `{}`. Monitoring clients must supply their
+account's bearer token (`make status` reads `TOPP_API_TOKEN` from the environment).
+`GET /health` remains public and reports only service
+health booleans, never account IDs or import timestamps.
+
+### Development checks
+
+Run `npm ci --ignore-scripts`, `npm run lint`, and `npm test` (TypeScript build,
+existing performance tests and in-process Supertest security regressions).
+`createApp` constructs production routing without opening a listener or reading
+application configuration, so tests inject only synthetic services.
+
+Run `npm run test:mysql` with `TEST_MYSQL_URL` pointing at a **disposable MySQL 8**
+server, for example `mysql://root@127.0.0.1:3306`. The test account needs permission
+to create/drop databases. The suite creates a random `topp_synthetic_*` database,
+loads only the necessary table definitions, inserts synthetic records with shared
+episode IDs/titles across accounts, and drops its database after testing. It does
+not read application database settings. GitHub Actions runs these same checks on
+branch pushes, without deployments or image publishing.
+
+Legacy `make e2e-tests` expects a separately running API/database and its own auth
+configuration; it is not part of the isolated default test command. Never point
+it at a production service or load private payloads for regression tests.
+
+The existing dependency graph has separately reported runtime and development
+security advisories. These focused application fixes do not refresh dependencies
+or establish an audit-clean baseline. Review with
+`npm audit --package-lock-only --ignore-scripts` (and `--omit=dev` for runtime).
 
 ### Tools to create (JSON) schemata
 

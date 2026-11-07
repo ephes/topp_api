@@ -7,7 +7,7 @@ export interface ConnectorPayload {
         start: string
         end: string
     }
-    data: Object
+    data: object
     provider: string
 }
 export interface SpotifyPerformancePayload {

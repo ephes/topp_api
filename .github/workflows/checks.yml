@@ -1,0 +1,31 @@
+name: Checks
+on: [push, workflow_dispatch]
+permissions:
+    contents: read
+jobs:
+    test:
+        runs-on: ubuntu-latest
+        services:
+            mysql:
+                image: mysql:8.4
+                env:
+                    MYSQL_ALLOW_EMPTY_PASSWORD: 'yes'
+                ports:
+                    - 3306:3306
+                options: >-
+                    --health-cmd="mysqladmin ping --silent"
+                    --health-interval=5s
+                    --health-timeout=5s
+                    --health-retries=30
+        steps:
+            - uses: actions/checkout@v4
+            - uses: actions/setup-node@v4
+              with:
+                  node-version: 22
+                  cache: npm
+            - run: npm ci --ignore-scripts --no-audit --no-fund
+            - run: npm run lint
+            - run: npm test
+            - run: npm run test:mysql
+              env:
+                  TEST_MYSQL_URL: mysql://root@127.0.0.1:3306

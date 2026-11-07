@@ -1,1 +1,1 @@
-SELECT 'Pong' AS result;
+SELECT 'Pong' AS result WHERE ? > 0;

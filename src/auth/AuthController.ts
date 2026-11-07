@@ -2,10 +2,30 @@ import { AuthError } from '../types/api'
 import { NextFunction, Request, RequestHandler, Response } from 'express'
 
 class AuthController {
-    accountsMap: { [key: string]: number }
+    private accountsMap: Map<string, number>
 
-    constructor(accountsMap: { [key: string]: number }) {
-        this.accountsMap = accountsMap
+    constructor(accountsMap: unknown) {
+        if (
+            accountsMap === null ||
+            typeof accountsMap !== 'object' ||
+            Array.isArray(accountsMap) ||
+            Object.keys(accountsMap).length === 0
+        ) {
+            throw new Error('Invalid accounts configuration')
+        }
+        const entries = Object.entries(accountsMap)
+        for (const [token, accountId] of entries) {
+            if (
+                !token ||
+                /\s/.test(token) ||
+                !Number.isInteger(accountId) ||
+                accountId <= 0 ||
+                accountId > 2147483647
+            ) {
+                throw new Error('Invalid accounts configuration')
+            }
+        }
+        this.accountsMap = new Map(entries)
     }
 
     /**
@@ -22,8 +42,8 @@ class AuthController {
         // remove 'Bearer ' from token to get the actual token
         const token = authToken.substring(7)
 
-        if (this.accountsMap[token] !== undefined) {
-            return this.accountsMap[token]
+        if (this.accountsMap.has(token)) {
+            return this.accountsMap.get(token) as number
         } else {
             throw new AuthError('Specified token is not valid')
         }

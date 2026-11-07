@@ -9,8 +9,8 @@ class StatusApi {
     }
 
     // Returns the latest status for the given accountId and endpoint
-    async getStatus() {
-        return await this.statusRepo.getStatus()
+    async getStatus(accountId: number) {
+        return await this.statusRepo.getStatus(accountId)
     }
 
     async updateStatus(accountId: number, update: StatusPayload): Promise<any> {

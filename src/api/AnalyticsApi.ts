@@ -8,7 +8,7 @@ class AnalyticsApi {
     }
 
     // Returns the latest Analytics for the given accountId and endpoint
-    async getAnalytics(endpoint: string) {
+    async getAnalytics(accountId: number, endpoint: string) {
         // Validate endpoint.
         // The endpoint needs to be a string and must not be empty.
         // It needs to be of the form `vN/endpoint` where N is a number and must
@@ -21,7 +21,7 @@ class AnalyticsApi {
             throw new Error('Invalid endpoint. Must be of the form v1/endpoint')
         }
 
-        return await this.AnalyticsRepo.execute(endpoint)
+        return await this.AnalyticsRepo.execute(accountId, endpoint)
     }
 }
 
