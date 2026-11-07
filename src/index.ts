@@ -21,6 +21,8 @@ import { createApp } from './app'
 
 const config = new Config()
 const authController = new AuthController(config.getAccountsMap())
+const publicOrigin = config.getPublicOrigin()
+const trustProxy = config.getTrustedProxies()
 
 const pool = mysql.createPool({
     uri: config.getMySQLConnectionString(),
@@ -66,6 +68,8 @@ const connectorApi = new ConnectorApi({
 
 const app = createApp({
     authController,
+    publicOrigin,
+    trustProxy,
     eventsApi,
     connectorApi,
     feedbackApi,

@@ -1,5 +1,5 @@
 import { FeedbackRepository } from '../db/FeedbackRepository'
-import { HttpError } from '../types/api'
+import { PayloadError } from '../types/api'
 
 class FeedbackApi {
     feedbackRepo: FeedbackRepository
@@ -8,26 +8,33 @@ class FeedbackApi {
         this.feedbackRepo = feedbackRepo
     }
 
-    async handleApiGet(
+    validateVote(
         episodeId: string | undefined,
-        userHash: string,
         feedbackType: string | undefined
     ) {
         if (
-            feedbackType !== undefined &&
-            episodeId !== undefined &&
-            !isNaN(Number(episodeId)) &&
-            (feedbackType === 'upvote' || feedbackType === 'downvote')
+            episodeId === undefined ||
+            !/^\d+$/.test(episodeId) ||
+            !Number.isSafeInteger(Number(episodeId)) ||
+            Number(episodeId) < 0 ||
+            (feedbackType !== 'upvote' && feedbackType !== 'downvote')
         ) {
-            return await this.feedbackRepo.addFeedback(
-                1,
-                Number(episodeId),
-                userHash,
-                feedbackType === 'upvote'
-            )
-        } else {
-            throw new HttpError('Invalid feedback request')
+            throw new PayloadError('Invalid feedback request')
         }
+    }
+
+    async handleApiPost(
+        episodeId: string,
+        userHash: string,
+        feedbackType: string
+    ) {
+        this.validateVote(episodeId, feedbackType)
+        return await this.feedbackRepo.addFeedback(
+            1,
+            Number(episodeId),
+            userHash,
+            feedbackType === 'upvote'
+        )
     }
 
     // Warning! This expects the comment to be already sanitized

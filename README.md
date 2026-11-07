@@ -33,11 +33,47 @@ This thin API layer is used to store `POST`ed payloads to the main storage syste
 
 ### Feedback API (thumbs up/down)
 
-The feedback API retrieves thumbs up/down votes from listeners.
-It stores one unique vote for each episode per IP and user-agent pair.
+Feedback remains public and stores one vote per episode and listener hash (IP
+and user agent). `GET /feedback/:episodeId/upvote` or `downvote` only displays a
+confirmation form. Crawlers, link previews, GET and HEAD never record a vote.
+The form deliberately submits `POST /feedback/:episodeId/:feedbackType` to save
+it. `POST /comments/:episodeId` accepts the rendered comment form.
 
-Endpoint `/feedback/:episodeID/[upvote|downvote]`
-e.g. `/feedback/123456/upvote`
+Set **`PUBLIC_ORIGIN`** (or `PUBLIC_ORIGIN_FILE`) to the canonical external HTTP(S)
+origin, e.g. `https://api.example.test`, with no trailing slash, path or credentials.
+It is required at startup. Both vote and comment POSTs require a matching Origin
+or `Sec-Fetch-Site: same-origin`; contradictory/cross-origin metadata is rejected
+with 403. Host headers do not determine the allowed origin. Browser forms lacking
+both headers are rejected. Existing feedback links now require confirmation;
+update callers that previously relied on GET recording a vote.
+
+Nonbrowser clients explicitly opt in using `Content-Type: application/json` and
+`X-Feedback-Client: api`, with no Origin or Fetch Metadata headers. For example,
+send `{}` to the vote URL or `{"email":"listener@example.test","comment":"Feedback"}`
+to the comments URL. A custom header/JSON request requires a browser preflight
+when cross-origin; the API does not grant cross-origin access. This boundary does
+not provide bot authentication or rate limiting.
+
+The listener hash uses Express's `req.ip`. **`TRUST_PROXY`** defaults to unset
+(peer address only), so spoofed `X-Forwarded-For` headers have no effect. When
+behind a proxy, set a comma-separated list of only trusted proxy IPs/CIDRs (or
+Express's named subnets), e.g. `loopback,203.0.113.0/24`. The trusted edge must
+replace untrusted forwarding headers. Avoid trusting every address; Express
+stops at the first untrusted hop. `TRUST_PROXY_FILE` is also supported. IP and user
+agent inputs are bounded to 128 and 512 characters before hashing; raw identity
+material is neither stored by these handlers nor logged. Configure this policy
+before adopting the change to preserve the intended per-listener vote identity.
+
+### Error responses
+
+Errors have stable, bounded plain-text bodies in development and production:
+400 `Invalid request`, 401 `Not authorized`, 403 `Forbidden`, 404 `Not Found`,
+413 `Request too large`, 415 `Unsupported media type`, and 500 `Internal server error`.
+Protected requests authenticate before route lookup; malformed JSON/body-size
+errors are handled before authentication. Unknown well-formed analytics names return 404; malformed version/query names
+return 400. Database failures return 500. Logs contain fixed failure categories/statuses,
+never exception text, SQL, credentials or submitted values. `/health` reports
+only booleans even when its database check fails.
 
 ### Authentication and analytics
 

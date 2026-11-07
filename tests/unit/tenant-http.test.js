@@ -1,3 +1,6 @@
+beforeEach(() => jest.spyOn(console, 'error').mockImplementation(() => {}))
+afterEach(() => jest.restoreAllMocks())
+
 const request = require('supertest')
 const { createApp } = require('../../dist/app')
 const { AuthController } = require('../../dist/auth/AuthController')
@@ -22,6 +25,7 @@ function setup() {
         ]),
     }
     const app = createApp({
+        publicOrigin: 'https://api.synthetic.example',
         authController: new AuthController({
             'synthetic-one': 1,
             'synthetic-two': 2,

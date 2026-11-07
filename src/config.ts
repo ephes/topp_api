@@ -59,6 +59,27 @@ class Config {
         return value
     }
 
+    getPublicOrigin(): string {
+        const value = this.readStringFromEnvOrFile('PUBLIC_ORIGIN', '') || ''
+        try {
+            const url = new URL(value)
+            if (
+                !['http:', 'https:'].includes(url.protocol) ||
+                value !== url.origin
+            ) {
+                throw new Error()
+            }
+            return value
+        } catch {
+            throw new Error('PUBLIC_ORIGIN must be an HTTP(S) origin')
+        }
+    }
+
+    getTrustedProxies(): string[] | false {
+        const value = this.readStringFromEnvOrFile('TRUST_PROXY', '') || ''
+        return value ? value.split(',').map((entry) => entry.trim()) : false
+    }
+
     getExpressPort(): number {
         const portString = this.readStringFromEnvOrFile('PORT', '8080')
         return parseInt(portString || '8080', 10)
@@ -84,7 +105,6 @@ class Config {
             if (host && user && password && database && port) {
                 connectionString = `mysql://${user}:${password}@${host}:${port}/${database}${options}`
             } else {
-                console.log(options)
                 throw new Error(
                     'MySQL connection string not defined or could not be built from environment variables'
                 )

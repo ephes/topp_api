@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Thank you for your feedback!</title>
+    <title>Episode feedback</title>
     <style>
         body {
             background-color: #f2f2f2;
@@ -101,8 +101,15 @@
         <div class="container">
             <div class="feedback">
                 <img src="/images/checkmark.svg" alt="checkmark">
-                <h1>Thank you for your feedback!</h1>
-                <p>Thank you for helping us improve our podcast.</p>
+                {{#if confirmed}}
+                    <h1>Thank you for your feedback!</h1>
+                    <p>Thank you for helping us improve our podcast.</p>
+                {{else}}
+                    <h1>Confirm your feedback</h1>
+                    <form action="/feedback/{{episodeId}}/{{feedbackType}}" method="post">
+                        <input type="submit" value="Confirm {{feedbackType}}">
+                    </form>
+                {{/if}}
                 <p>Feel free to send us additional feedback using the form below.</p>
                 {{#if numberOfComments}}
                     <p>So far we received {{numberOfComments}} comment(s) for this episode.</p>
