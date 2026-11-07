@@ -5,7 +5,9 @@
   "scripts": {
     "build": "tsc",
     "dev": "concurrently \"tsc --watch\" \"nodemon -q dist/index.js\"",
-    "lint": "npx eslint --config .eslintrc.js  ./src"
+    "lint": "npx eslint --config .eslintrc.js  ./src",
+    "test": "npm run build && jest --runInBand",
+    "test:mysql": "npm run build && jest --runInBand --testMatch \"**/tests/mysql/**/*.test.js\""
   },
   "license": "MIT",
   "private": true,

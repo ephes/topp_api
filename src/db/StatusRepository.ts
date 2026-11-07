@@ -19,29 +19,12 @@ class StatusRepository {
         this.pool = pool
     }
 
-    // Reads from the `updates` table and returns the latest status
-    // updates for all endpoints of an account.
-    // (Updates are stored in JSON format)
-    //
-    // Returns all rows as a single object like this where the key is the
-    // account ID and the value is an array of objects with the endpoint name as
-    // the key and the update time as the value:
-    // {
-    //     1: {
-    //       latestUpdates: [
-    //           'aggregate': '2021-01-01 00:00:00'
-    //           'detailedStreams': '2021-01-01 00:00:00'
-    //       ]
-    //     },
-    //     2: {
-    //       latestUpdates: [
-    //           ...
-    //       ]
-    //     }
-    // }
-    async getStatus(): Promise<Status> {
-        const query = `SELECT account_id, endpoint, MAX(created) AS latest_update FROM updates GROUP BY account_id, endpoint`
-        const response = (await this.pool.query(query)) as RowDataPacket[]
+    // Return endpoint update times for the authenticated account only.
+    async getStatus(accountId: number): Promise<Status> {
+        const query = `SELECT account_id, endpoint, MAX(created) AS latest_update FROM updates WHERE account_id = ? GROUP BY account_id, endpoint`
+        const response = (await this.pool.query(query, [
+            accountId,
+        ])) as RowDataPacket[]
 
         // Response should have at least one row.
         // If not, return an empty object.

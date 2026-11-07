@@ -1,18 +1,19 @@
-WITH
+WITH requested_account AS (SELECT ? AS account_id),
 spotify as (
-  SELECT 
-  ep_name as raw_name,
-  `spotifyEpisodePerformance`.`spp_percentile_25` as quarter1, 
-  `spotifyEpisodePerformance`.`spp_percentile_50` as quarter2, 
-  `spotifyEpisodePerformance`.`spp_percentile_75` as quarter3, 
+  SELECT
+  spotifyEpisodePerformance.account_id, ep_name as raw_name,
+  `spotifyEpisodePerformance`.`spp_percentile_25` as quarter1,
+  `spotifyEpisodePerformance`.`spp_percentile_50` as quarter2,
+  `spotifyEpisodePerformance`.`spp_percentile_75` as quarter3,
   `spotifyEpisodePerformance`.`spp_percentile_100` as quarter4,
   spp_sample_max as listeners
   FROM `spotifyEpisodePerformance`
-  LEFT JOIN `spotifyEpisodeMetadata` `SpotifyEpisodeMetadata` ON `spotifyEpisodePerformance`.`episode_id` = `SpotifyEpisodeMetadata`.`episode_id`
+  JOIN requested_account USING (account_id)
+  LEFT JOIN `spotifyEpisodeMetadata` `SpotifyEpisodeMetadata` ON `spotifyEpisodePerformance`.`episode_id` = `SpotifyEpisodeMetadata`.`episode_id` AND `spotifyEpisodePerformance`.`account_id` = `SpotifyEpisodeMetadata`.`account_id`
 ),
 apple as (
-  SELECT 
-  ep_name as raw_name,
+  SELECT
+  account_id, ep_name as raw_name,
   aed_quarter1_median_listeners/aed_histogram_max_listeners*100 as quarter1,
   aed_quarter2_median_listeners/aed_histogram_max_listeners*100 as quarter2,
   aed_quarter3_median_listeners/aed_histogram_max_listeners*100 as quarter3,
@@ -20,10 +21,11 @@ apple as (
   aed_histogram_max_listeners as listeners,
   ep_guid as guid
   FROM appleEpisodeDetails
-  LEFT JOIN appleEpisodeMetadata USING (episode_id)
+  JOIN requested_account USING (account_id)
+  LEFT JOIN appleEpisodeMetadata USING (account_id, episode_id)
 )
 
-SELECT 
+SELECT
 apple.raw_name as name,
 guid,
 ((spotify.quarter1*spotify.listeners)+(apple.quarter1*apple.listeners))/(spotify.listeners+apple.listeners) as quarter1_combined,
@@ -41,5 +43,5 @@ apple.quarter4 as apple_quarter4,
 spotify.listeners+apple.listeners as listeners_combined,
 apple.listeners as apple_listeners,
 spotify.listeners as spotify_listeners
-FROM spotify JOIN apple ON spotify.raw_name = apple.raw_name
+FROM spotify JOIN apple ON spotify.raw_name = apple.raw_name AND spotify.account_id = apple.account_id
 WHERE apple.quarter1 IS NOT NULL AND spotify.quarter1 IS NOT NULL

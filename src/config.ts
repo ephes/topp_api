@@ -15,13 +15,10 @@ class Config {
      * */
     getAccountsMap(): { [key: string]: number } {
         const accounts = this.readStringFromEnvOrFile('ACCOUNTS', '{}')
-        if (accounts !== undefined && accounts !== '{}') {
-            const accountMap = JSON.parse(accounts)
-            return accountMap
-        } else {
-            throw new Error(
-                `ACCOUNTS not defined or invald in environment variables: ${accounts}`
-            )
+        try {
+            return JSON.parse(accounts || '{}')
+        } catch {
+            throw new Error('Invalid accounts configuration')
         }
     }
 

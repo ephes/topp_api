@@ -22,14 +22,14 @@ clean: ## Clean build files
 
 .PHONY: lint
 lint: ## run linter
-	npm run lint	
+	npm run lint
 
 .PHONY: init
 init: install
 
 .PHONY: install
 install: ## Installs dependencies
-	npm install	
+	npm install
 
 .PHONY: shell-%
 shell-%: ## Run a shell in a container
@@ -37,16 +37,16 @@ shell-%: ## Run a shell in a container
 
 .PHONY: e2e-tests
 e2e-tests: ## Start end2end tests (local running server is required)
-	npx jest ./tests/api_e2e --verbose true
+	npx jest --testMatch "**/tests/api_e2e/**/*.test.js" --verbose true
 
 .PHONY: status
 status: ## Send status request
-	curl http://localhost:8080/status  -H 'Content-Type: application/json' 
+	@curl --fail http://localhost:8080/status -H "Authorization: Bearer $${TOPP_API_TOKEN:?Set TOPP_API_TOKEN}"
 
 .PHONY: send-api-req-local
 send-api-req-local: ## Send a request to the local running server
-	curl -X POST http://localhost:8080/events -H 'Content-Type: application/json' -H 'Authorization: Bearer cn389ncoiwuencr' --data-binary "@./fixtures/forwarder.json" 
+	curl -X POST http://localhost:8080/events -H 'Content-Type: application/json' -H 'Authorization: Bearer cn389ncoiwuencr' --data-binary "@./fixtures/forwarder.json"
 
 .PHONY: send-api-req-prod
 send-api-req-prod: ## Send request to production
-	curl -X POST https://api.openpodcast.dev/connector  -H 'Content-Type: application/json' -H 'Authorization: Bearer cn389ncoiwuencr' --data-binary "@./fixtures/spotifyListeners.json" 
+	curl -X POST https://api.openpodcast.dev/connector  -H 'Content-Type: application/json' -H 'Authorization: Bearer cn389ncoiwuencr' --data-binary "@./fixtures/spotifyListeners.json"
