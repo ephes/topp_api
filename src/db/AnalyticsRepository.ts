@@ -1,4 +1,5 @@
 import { Pool } from 'mysql2/promise'
+import { HttpError } from '../types/api'
 
 // A generic query handler for analytics endpoints.
 // The queries are loaded from the filesystem and stored in a map.
@@ -19,7 +20,9 @@ class AnalyticsRepository {
         const query = this.queries.get(endpoint)
 
         if (!query) {
-            throw new Error(`Query not found for endpoint ${endpoint}`)
+            const error = new HttpError('Not Found')
+            error.status = 404
+            throw error
         }
 
         // Execute the query and return the result

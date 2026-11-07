@@ -8,7 +8,7 @@ const mysqlHealthy = (pool: any) =>
             const result = await pool.query(statement)
             return result !== undefined
         } catch (e) {
-            console.error(e)
+            console.error('Health check failed', { kind: 'database' })
             return false
         }
     }

@@ -6,7 +6,6 @@ import express, {
     NextFunction,
 } from 'express'
 import bodyParser from 'body-parser'
-import crypto from 'crypto'
 import { body, validationResult } from 'express-validator'
 import { EventsApi, ConnectorApi } from './api'
 import { AuthController } from './auth/AuthController'
@@ -16,6 +15,12 @@ import { unless } from './expressHelpers'
 import { FeedbackApi } from './api/FeedbackApi'
 import { StatusApi } from './api/StatusApi'
 import { AnalyticsApi } from './api/AnalyticsApi'
+import {
+    feedbackSubmissionBoundary,
+    userHashMiddleware,
+    privateErrorHandler,
+    logRequestFailure,
+} from './httpSecurity'
 
 export interface AppServices {
     authController: AuthController
@@ -25,6 +30,8 @@ export interface AppServices {
     statusApi: StatusApi
     analyticsApi: AnalyticsApi
     dbHealthy: () => Promise<boolean>
+    publicOrigin: string
+    trustProxy?: string[] | false
 }
 
 export function createApp({
@@ -35,6 +42,8 @@ export function createApp({
     statusApi,
     analyticsApi,
     dbHealthy,
+    publicOrigin,
+    trustProxy = false,
 }: AppServices): Express {
     // defines all endpoints where auth is not required
     const publicEndpoints = [
@@ -45,6 +54,13 @@ export function createApp({
     ]
 
     const app: Express = express()
+    // Express/proxy-addr validates configured addresses and CIDRs at startup.
+    try {
+        app.set('trust proxy', trustProxy)
+    } catch {
+        throw new Error('Invalid trusted proxy configuration')
+    }
+    const requireFeedbackSubmission = feedbackSubmissionBoundary(publicOrigin)
 
     // extract json payload from body automatically
     app.use(bodyParser.json({ limit: '1mb' }))
@@ -57,21 +73,16 @@ export function createApp({
     // throw exception if not authorized
     app.use(unless(publicEndpoints, authController.getMiddleware()))
 
-    // throw error if no payload submitted
-    app.use(
-        unless(
-            // allow analytics endpoint and public endpoints
-            // to be called without payload
-            publicEndpoints.concat(['^/analytics/*', '^/status$']),
-            function (req: Request, res: Response, next: NextFunction) {
-                // exclude status endpoint from this middleware
-                if (Object.keys(req.body).length === 0) {
-                    const err = new PayloadError('Request format invalid')
-                    return next(err)
-                }
-                return next()
+    // Only the payload-bearing ingestion routes require a body. Unknown routes
+    // must reach the 404 handler even when the request has no body.
+    app.post(
+        ['/events', '/connector'],
+        (req: Request, res: Response, next: NextFunction) => {
+            if (Object.keys(req.body).length === 0) {
+                return next(new PayloadError('Request format invalid'))
             }
-        )
+            next()
+        }
     )
 
     // request handler which runs after all other request handlers
@@ -89,49 +100,57 @@ export function createApp({
                 }
                 await statusApi.updateStatus(res.locals.user.accountId, update)
             } catch (err) {
-                console.error(err)
+                logRequestFailure('status-update')
             }
         }
         res.on('close', afterResponse)
         next()
     })
 
-    const userHashMiddleware = (
+    const renderFeedback = async (
         req: Request,
         res: Response,
         next: NextFunction
     ) => {
-        let ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress
-        ip = Array.isArray(ip) ? ip[0] : ip
-        ip = ip || ''
-
-        let agent = req.headers['user-agent']
-        agent = agent || ''
-
-        req.headers.userHash = crypto
-            .createHash('sha256')
-            .update(ip + agent)
-            .digest('hex')
-
-        next()
+        try {
+            feedbackApi.validateVote(
+                req.params.episodeId,
+                req.params.feedbackType
+            )
+            const numberOfComments = await feedbackApi.getNumberOfComments(
+                req.params.episodeId
+            )
+            res.render('feedback.hbs', {
+                episodeId: req.params.episodeId,
+                feedbackType: req.params.feedbackType,
+                numberOfComments,
+                confirmed: false,
+            })
+        } catch (err) {
+            next(err)
+        }
     }
-
-    app.get(
+    app.get('/feedback/:episodeId/:feedbackType', renderFeedback)
+    app.post(
         '/feedback/:episodeId/:feedbackType',
+        requireFeedbackSubmission,
         userHashMiddleware,
         async (req: Request, res: Response, next: NextFunction) => {
-            const feedbackType = req.params.feedbackType
-            const episodeId = req.params.episodeId
             try {
-                await feedbackApi.handleApiGet(
-                    episodeId,
-                    req.headers.userHash as string,
-                    feedbackType
+                await feedbackApi.handleApiPost(
+                    req.params.episodeId,
+                    res.locals.userHash,
+                    req.params.feedbackType
                 )
                 const numberOfComments = await feedbackApi.getNumberOfComments(
-                    episodeId
+                    req.params.episodeId
                 )
-                res.render('feedback.hbs', { episodeId, numberOfComments })
+                res.render('feedback.hbs', {
+                    episodeId: req.params.episodeId,
+                    feedbackType: req.params.feedbackType,
+                    numberOfComments,
+                    confirmed: true,
+                })
             } catch (err) {
                 next(err)
             }
@@ -161,10 +180,6 @@ export function createApp({
                     res.json(response)
                 }
             } catch (err) {
-                // Always return a 404 if the query is not found
-                // (instead of the default 500)
-                res.status(404)
-                console.log(err)
                 next(err)
             }
         }
@@ -188,20 +203,21 @@ export function createApp({
 
     app.post(
         '/comments/:episodeId',
+        requireFeedbackSubmission,
         userHashMiddleware,
         body('email').isEmail(),
         body('comment').not().isEmpty().trim().isLength({ min: 3, max: 1000 }),
         async (req: Request, res: Response, next: NextFunction) => {
             const errors = validationResult(req)
             if (!errors.isEmpty()) {
-                return res.status(400).json({ errors: errors.array() })
+                return next(new PayloadError('Invalid comment'))
             }
 
             const episodeId = req.params.episodeId
             try {
                 await feedbackApi.handleCommentPost(
                     episodeId,
-                    req.headers.userHash as string,
+                    res.locals.userHash,
                     req.body.comment
                 )
 
@@ -265,19 +281,7 @@ export function createApp({
         next(err)
     })
 
-    // error handler
-    app.use(function (err: Error, req: Request, res: Response) {
-        let httpCode = 500
-        if (err instanceof HttpError) {
-            console.log(err)
-            httpCode = err.status
-        } else {
-            // if it is not a known http error, print it for debugging purposes
-            console.log(err)
-        }
-        res.status(httpCode)
-        res.send(err.message)
-    })
+    app.use(privateErrorHandler)
 
     return app
 }
